@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 캐릭터 보이스 챗룸</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .chat-container {
+            width: 450px;
+            height: 600px;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .chat-header {
+            background-color: #4A90E2;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+        .chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .message {
+            max-width: 70%;
+            padding: 10px 14px;
+            border-radius: 15px;
+            font-size: 0.95rem;
+            line-height: 1.4;
+        }
+        .user {
+            background-color: #4A90E2;
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 2px;
+        }
+        .ai {
+            background-color: #e9ecef;
+            color: #333;
+            align-self: flex-start;
+            border-bottom-left-radius: 2px;
+        }
+        .chat-input-area {
+            display: flex;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-top: 1px solid #dee2e6;
+        }
+        .chat-input-area input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 20px;
+            outline: none;
+            font-size: 0.95rem;
+        }
+        .chat-input-area button {
+            background-color: #4A90E2;
+            color: white;
+            border: none;
+            padding: 0 15px;
+            margin-left: 8px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .chat-input-area button:hover {
+            background-color: #357ABD;
+        }
+    </style>
+</head>
+<body>
+
+<div class="chat-container">
+    <div class="chat-header">나의 AI 캐릭터 친구</div>
+    <div class="chat-messages" id="chatMessages">
+        <div class="message ai">안녕하세요! 말씀해 주시면 목소리로 답변해 드려요.</div>
+    </div>
+    <div class="chat-input-area">
+        <input type="text" id="userInput" placeholder="메시지를 입력하세요..." onkeypress="handleKeyPress(event)">
+        <button onclick="sendMessage()">전송</button>
+    </div>
+</div>
+
+<script>
+    const BACKEND_URL = 'http://localhost:8000/api/chat';
+
+    function appendMessage(text, sender) {
+        const chatMessages = document.getElementById('chatMessages');
+        const messageDiv = document.createElement('div');
+        messageDiv.classList.add('message', sender);
+        messageDiv.innerText = text;
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function handleKeyPress(event) {
+        if (event.key === 'Enter') {
+            sendMessage();
+        }
+    }
+
+    async function sendMessage() {
+        const inputEl = document.getElementById('userInput');
+        const message = inputEl.value.trim();
+        if (!message) return;
+
+        // 1. 유저 말풍선 추가 및 입력창 비우기
+        appendMessage(message, 'user');
+        inputEl.value = '';
+
+        try {
+            // 2. 백엔드 서버에 요청
+            const response = await fetch(BACKEND_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: message })
+            });
+
+            if (!response.ok) throw new Error('서버 통신 실패');
+
+            // 3. 백엔드가 보낸 커스텀 헤더에서 AI 답변 텍스트 추출 (디코딩 필수)
+            const encodedText = response.headers.get('X-AI-Response-Text');
+            const aiText = decodeURIComponent(encodedText);
+            
+            // 4. AI 말풍선 추가
+            appendMessage(aiText, 'ai');
+
+            // 5. 백엔드가 보낸 음성(Audio Binary Data) 받아와서 자동 재생
+            const audioBlob = await response.blob();
+            const audioUrl = URL.createObjectURL(audioBlob);
+            const audio = new Audio(audioUrl);
+            audio.play();
+
+        } catch (error) {
+            console.error(error);
+            appendMessage('에러가 발생했습니다. 다시 시도해 주세요.', 'ai');
+        }
+    }
+</script>
+
+</body>
+</html>
