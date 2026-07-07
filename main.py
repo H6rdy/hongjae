@@ -23,8 +23,9 @@ app.add_middleware(
 
 # ⚠️ 여기에 발급받은 키들을 정확하게 넣어줘!
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "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")
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "sk_a47fc2ea750fdb68fcc99583ada2820a9f8eebe33d8307f2")
-VOICE_ID = os.getenv("VOICE_ID", "VTuktem9X1Bo2iO5sdYE")
+
+# 로컬 OpenVoice TTS 서버 주소 (tts_server.py를 먼저 별도 프로세스로 실행해두어야 함)
+LOCAL_TTS_URL = os.getenv("LOCAL_TTS_URL", "http://localhost:8001/tts")
 
 class ChatRequest(BaseModel):
     message: str
@@ -127,46 +128,29 @@ async def chat_and_voice(request: ChatRequest):
         print(f"[오류] Groq API 단계에서 터짐: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Groq 에러: {str(e)}")
 
-    # 2. ElevenLabs TTS API 호출 (안전한 기본 데이터 포맷 적용)
-    eleven_url = f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}"
-    eleven_headers = {
-        "xi-api-key": ELEVENLABS_API_KEY,
-        "Content-Type": "application/json",
-        "accept": "audio/mpeg"
-    }
-    eleven_data = {
-        "text": ai_text,
-        "model_id": "eleven_multilingual_v2",  # 한국어 지원 공식 모델
-        "voice_settings": {
-            "stability": 0.5,
-            "similarity_boost": 0.75,
-            "style": 0.0,
-            "use_speaker_boost": True
-        }
-    }
-
+    # 2. 로컬 OpenVoice TTS 서버 호출 (본인 목소리로 합성)
     try:
-        eleven_res = requests.post(eleven_url, json=eleven_data, headers=eleven_headers)
-        
-        # 💡 만약 에러가 나면 ElevenLabs가 보낸 구체적인 거절 사유를 로그에 출력
-        if not list(eleven_res.headers.keys()):
-            pass
-        if eleven_res.status_code != 200:
-            print(f"[오류] ElevenLabs 응답 실패 코드: {eleven_res.status_code}")
-            print(f"[오류] ElevenLabs 상세 메시지: {eleven_res.text}")
-            raise HTTPException(status_code=eleven_res.status_code, detail=eleven_res.text)
-            
-        audio_bytes = eleven_res.content
-        print("[성공] ElevenLabs 음성 합성 완료!")
+        tts_res = requests.post(LOCAL_TTS_URL, json={"text": ai_text}, timeout=60)
+
+        if tts_res.status_code != 200:
+            print(f"[오류] 로컬 TTS 응답 실패 코드: {tts_res.status_code}")
+            print(f"[오류] 로컬 TTS 상세 메시지: {tts_res.text}")
+            raise HTTPException(status_code=tts_res.status_code, detail=tts_res.text)
+
+        audio_bytes = tts_res.content
+        print("[성공] OpenVoice 음성 합성 완료!")
+    except requests.exceptions.ConnectionError:
+        print("[오류] 로컬 TTS 서버에 연결할 수 없습니다. tts_server.py가 실행 중인지 확인하세요.")
+        raise HTTPException(status_code=500, detail="로컬 TTS 서버(8001)에 연결할 수 없습니다. tts_server.py를 먼저 실행해주세요.")
     except Exception as e:
-        print(f"[오류] ElevenLabs 단계에서 터짐: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"ElevenLabs 에러: {str(e)}")
+        print(f"[오류] 로컬 TTS 단계에서 터짐: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"로컬 TTS 에러: {str(e)}")
 
     # 3. 데이터 반환
     encoded_text = urllib.parse.quote(ai_text)
     return StreamingResponse(
         io.BytesIO(audio_bytes),
-        media_type="audio/mpeg",
+        media_type="audio/wav",
         headers={"X-AI-Response-Text": encoded_text}
     )
 
