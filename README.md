@@ -1,6 +1,4 @@
-cd hongjae
 
-pip install fastapi uvicorn requests python-dotenv
 
 *powershell
 
