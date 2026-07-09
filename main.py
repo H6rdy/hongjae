@@ -22,7 +22,7 @@ app.add_middleware(
 )
 
 # ⚠️ 여기에 발급받은 키들을 정확하게 넣어줘!
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "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")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "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")
 
 # 로컬 OpenVoice TTS 서버 주소 (tts_server.py를 먼저 별도 프로세스로 실행해두어야 함)
 LOCAL_TTS_URL = os.getenv("LOCAL_TTS_URL", "http://localhost:8001/tts")
